@@ -1,25 +1,25 @@
-use std::borrow::Cow;
-use std::collections::BTreeMap;
-
-use serde::{Deserialize, Serialize};
-use solana_program::{
-    hash::Hash,
-    instruction::CompiledInstruction,
-    instruction::{Instruction, InstructionError},
-    message::{
-        v0::{LoadedAddresses, Message, MessageAddressTableLookup},
-        AccountKeys, MessageHeader,
+use {
+    serde::{Deserialize, Serialize},
+    solana_program::{
+        hash::Hash,
+        instruction::CompiledInstruction,
+        instruction::{Instruction, InstructionError},
+        message::{
+            v0::{LoadedAddresses, Message, MessageAddressTableLookup},
+            AccountKeys, MessageHeader,
+        },
+        pubkey::Pubkey,
+        slot_history::Slot,
     },
-    pubkey::Pubkey,
-    slot_history::Slot,
+    std::borrow::Cow,
+    std::collections::BTreeMap,
+    thiserror::Error,
 };
-use thiserror::Error;
 
-/// The maximum number of addresses that a lookup table can hold
-pub const LOOKUP_TABLE_MAX_ADDRESSES: usize = 256;
+pub mod constants;
+pub mod instructions;
 
-/// The serialized size of lookup table metadata
-pub const LOOKUP_TABLE_META_SIZE: usize = 56;
+use crate::constants::*;
 
 /// Program account states
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
@@ -211,16 +211,6 @@ impl CompiledKeys {
                 !meta.is_signer && !meta.is_invoked && !meta.is_writable
             })?;
 
-        println!(
-            "writable_indexes: {:?}, drained_writable_keys: {:?}",
-            writable_indexes, drained_writable_keys
-        );
-
-        println!(
-            "readonly_indexes: {:?}, drained_readonly_keys: {:?}",
-            readonly_indexes, drained_readonly_keys
-        );
-
         // Don't extract lookup if no keys were found
         if writable_indexes.is_empty() && readonly_indexes.is_empty() {
             return Ok(None);
@@ -272,7 +262,7 @@ impl CompiledKeys {
     }
 }
 
-pub trait Compile {
+pub trait TryCompileMsg {
     fn try_compile(
         payer: &Pubkey,
         instructions: &[Instruction],
@@ -283,7 +273,7 @@ pub trait Compile {
         Self: Sized;
 }
 
-impl Compile for Message {
+impl TryCompileMsg for Message {
     fn try_compile(
         payer: &Pubkey,
         instructions: &[Instruction],
@@ -291,8 +281,6 @@ impl Compile for Message {
         recent_blockhash: Hash,
     ) -> Result<Self, CompileError> {
         let mut compiled_keys = CompiledKeys::compile(instructions, Some(*payer));
-
-        println!("compiled_keys: {:?}", compiled_keys);
 
         let mut address_table_lookups = Vec::with_capacity(address_lookup_table_accounts.len());
         let mut loaded_addresses_list = Vec::with_capacity(address_lookup_table_accounts.len());
